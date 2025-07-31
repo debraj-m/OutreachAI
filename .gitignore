@@ -79,10 +79,13 @@ secrets.json
 *.key
 *.pem
 
-# CSV files with real data (keep examples)
+# CSV files with real data (keep examples only)
 data/*.csv
-!data/sample_prospects.csv
-!data/test_prospects.csv
+data/real_*
+data/production_*
+data/my_*
+!data/examples/
+!data/examples/*.csv
 
 # Jupyter Notebooks
 .ipynb_checkpoints
@@ -94,3 +97,6 @@ docs/_build/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+# Original sample file (keep private)
+data/sample_prospects.csv
