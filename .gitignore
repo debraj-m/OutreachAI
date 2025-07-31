@@ -97,6 +97,3 @@ docs/_build/
 .mypy_cache/
 .dmypy.json
 dmypy.json
-
-# Original sample file (keep private)
-data/sample_prospects.csv
