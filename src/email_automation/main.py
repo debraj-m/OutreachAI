@@ -77,6 +77,7 @@ class PersonalizedEmailAutomation:
                 model=ai_config.model,
                 max_tokens=800,  # Specific for email generation
                 temperature=0.8,  # Higher creativity for emails
+                config=self.config_manager,
                 logger=self.logger
             )
             

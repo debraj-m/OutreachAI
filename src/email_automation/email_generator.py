@@ -43,6 +43,7 @@ class EmailGenerator:
     
     def __init__(self, api_key: str, model: str = "gpt-4o-mini",
                  max_tokens: int = 800, temperature: float = 0.8,
+                 config: Optional[Any] = None,
                  logger: Optional[logging.Logger] = None):
         """
         Initialize Email Generator
@@ -52,12 +53,14 @@ class EmailGenerator:
             model: OpenAI model to use
             max_tokens: Maximum tokens for response
             temperature: Response creativity (0.0-1.0)
+            config: Configuration manager instance
             logger: Logger instance
         """
         self.api_key = api_key
         self.model = model
         self.max_tokens = max_tokens
         self.temperature = temperature
+        self.config = config
         self.logger = logger or logging.getLogger(__name__)
         
         # Initialize OpenAI client based on version
@@ -210,7 +213,16 @@ class EmailGenerator:
         """Get system prompt for email generation"""
         tone_config = self.tone_configurations.get(tone, self.tone_configurations['professional'])
         
-        return f"""You are {self.config.email_config.sender_name}, a freelance business technology consultant who specializes in finding revenue opportunities and competitive advantages through technology.
+        # Get sender name from config or use default
+        sender_name = "Your Technical Solutions Consultant"
+        try:
+            if self.config and hasattr(self.config, 'email_config') and hasattr(self.config.email_config, 'sender_name'):
+                sender_name = self.config.email_config.sender_name
+        except AttributeError as e:
+            self.logger.warning(f"Could not access sender name from config: {e}")
+            pass
+        
+        return f"""You are {sender_name}, a freelance business technology consultant who specializes in finding revenue opportunities and competitive advantages through technology.
 
         Your unique approach as a Technical Solutions Architect:
         - Deep technical analysis of infrastructure, code, and systems
@@ -330,8 +342,17 @@ class EmailGenerator:
         opportunity_categories = self._categorize_opportunities(insights.opportunities)
         selected_category = self._select_email_focus(opportunity_categories)
         
+        # Get sender name from config or use default
+        sender_name = "Your Technical Solutions Consultant"
+        try:
+            if self.config and hasattr(self.config, 'email_config') and hasattr(self.config.email_config, 'sender_name'):
+                sender_name = self.config.email_config.sender_name
+        except AttributeError as e:
+            self.logger.warning(f"Could not access sender name from config: {e}")
+            pass
+        
         prompt = f"""
-        Create a compelling business outreach email from {self.config.email_config.sender_name} to {prospect.first_name} {prospect.last_name} 
+        Create a compelling business outreach email from {sender_name} to {prospect.first_name} {prospect.last_name} 
         ({prospect.job_position} at {prospect.company_name}).
         
         CRITICAL BUSINESS INSIGHTS DISCOVERED:
@@ -356,12 +377,13 @@ class EmailGenerator:
         
         SPECIFIC REQUIREMENTS:
         - Length: 120-180 words maximum
+        - Start with "Hi {prospect.first_name}," 
         - Open with specific insight about their business/website
         - Focus on business impact, not technical features
         - Mention ONE compelling opportunity clearly
         - Position as business strategist, not web developer
         - End with consultative invitation to discuss
-        - Sign: "Best regards, {self.config.email_config.sender_name}"
+        - Include proper email signature: "Best regards,\\n{sender_name}"
         
         AVOID THESE COMMON MISTAKES:
         - Generic compliments about their website
@@ -374,9 +396,11 @@ class EmailGenerator:
         Return in JSON format:
         {{
             "subject": "Specific tech insight about {prospect.company_name} (under 60 characters)",
-            "body": "Tech-focused email body that makes them think 'this person understands our challenges'",
+            "body": "Hi {prospect.first_name},\\n\\n[Main email content]\\n\\n[Call to action question]\\n\\nBest regards,\\n{sender_name}",
             "cta": "Consultative invitation to discuss further"
         }}
+        
+        IMPORTANT: The email body must start with "Hi {prospect.first_name}," and end with:\\n\\nBest regards,\\n{sender_name}
         
         Make {prospect.first_name} think: "This person actually understands our business and has found something valuable."
         """
@@ -599,6 +623,13 @@ class EmailGenerator:
                     cta = "Would you be open to a brief 15-minute conversation this week?"
             else:
                 # Fallback for very short responses
+                sender_name = "Your Technical Solutions Consultant"
+                try:
+                    if self.config and hasattr(self.config, 'email_config') and hasattr(self.config.email_config, 'sender_name'):
+                        sender_name = self.config.email_config.sender_name
+                except AttributeError:
+                    pass
+                
                 subject = "Quick tech insight for your business"
                 body_lines = [
                     f"Hi there,",
@@ -607,7 +638,7 @@ class EmailGenerator:
                     f"As someone new to freelancing but with strong technical expertise, I'd love to share my findings with you.",
                     f"",
                     f"Best regards,",
-                    f"Debraj Mukherjee"
+                    f"{sender_name}"
                 ]
                 cta = "Would you be interested in a quick chat?"
         
@@ -619,29 +650,42 @@ class EmailGenerator:
                                        prospect: Prospect, insights: AIInsights) -> float:
         """Calculate email personalization score (0.0 to 1.0)"""
         score = 0.0
+        body_lower = body.lower()
         
-        # Check for prospect-specific information (40% of score)
-        if prospect.first_name.lower() in body.lower():
-            score += 0.15
-        if prospect.company_name.lower() in body.lower():
-            score += 0.15
-        if prospect.job_position.lower() in body.lower():
+        # Check for prospect-specific information (30% of score)
+        if prospect.first_name.lower() in body_lower:
             score += 0.10
+        if prospect.company_name.lower() in body_lower:
+            score += 0.15
+        if prospect.job_position.lower() in body_lower:
+            score += 0.05
         
         # Check for specific insights (40% of score)
         insight_mentions = 0
         all_insights = insights.opportunities + insights.pain_points + insights.recommendations
         
         for insight in all_insights[:5]:  # Check top 5 insights
-            if any(word.lower() in body.lower() for word in insight.split() if len(word) > 4):
+            insight_words = [word for word in insight.split() if len(word) > 4]
+            if any(word.lower() in body_lower for word in insight_words):
                 insight_mentions += 1
         
         score += min(insight_mentions * 0.08, 0.40)
         
-        # Check for specific business context (20% of score)
-        business_terms = ['website', 'business', 'company', 'industry', 'customers', 'growth']
-        business_mentions = sum(1 for term in business_terms if term in body.lower())
-        score += min(business_mentions * 0.03, 0.20)
+        # Check for specific business context (15% of score)
+        business_terms = ['revenue', 'customers', 'growth', 'optimization', 'efficiency', 'competitive']
+        business_mentions = sum(1 for term in business_terms if term in body_lower)
+        score += min(business_mentions * 0.02, 0.15)
+        
+        # Check for proper email structure (15% of score)
+        structure_score = 0.0
+        if f"hi {prospect.first_name.lower()}" in body_lower:
+            structure_score += 0.05
+        if "best regards" in body_lower:
+            structure_score += 0.05
+        if any(phrase in body_lower for phrase in ["would you", "interested in", "call", "chat", "discuss"]):
+            structure_score += 0.05
+        
+        score += structure_score
         
         return min(score, 1.0)
     
