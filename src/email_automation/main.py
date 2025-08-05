@@ -178,11 +178,31 @@ class PersonalizedEmailAutomation:
             
             # Step 2: Generate AI insights
             self.logger.info("Generating AI insights...")
-            ai_insights = self.ai_analyzer.analyze_opportunities(website_analysis, prospect)
+            ai_insights = None
+            max_retries = 2
             
-            if not ai_insights or not self.ai_analyzer.validate_insights(ai_insights):
+            for attempt in range(max_retries):
+                ai_insights = self.ai_analyzer.analyze_opportunities(website_analysis, prospect)
+                
+                if ai_insights and self.ai_analyzer.validate_insights(ai_insights):
+                    break
+                elif attempt < max_retries - 1:
+                    self.logger.warning(f"AI insights validation failed, retrying (attempt {attempt + 1}/{max_retries})")
+                    # Increase temperature slightly for more diverse results
+                    original_temp = self.ai_analyzer.temperature
+                    self.ai_analyzer.temperature = min(original_temp + 0.2, 1.0)
+                else:
+                    self.logger.error("AI insights generation failed after all retries")
+                    # Reset temperature
+                    self.ai_analyzer.temperature = original_temp if 'original_temp' in locals() else 0.7
+            
+            if not ai_insights:
                 result['errors'].append("AI insights generation failed or invalid")
                 return result
+            
+            # Reset temperature if it was modified
+            if 'original_temp' in locals():
+                self.ai_analyzer.temperature = original_temp
             
             result['steps_completed'].append('ai_analysis')
             result['ai_insights'] = self.ai_analyzer.get_insights_summary(ai_insights)

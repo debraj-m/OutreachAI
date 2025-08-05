@@ -34,8 +34,9 @@ class EmailContent:
     tone: str = "professional"
     
     def get_preview(self, length: int = 100) -> str:
-        """Get preview of email body"""
-        return self.email_body[:length] + "..." if len(self.email_body) > length else self.email_body
+        """Get a preview of the email content"""
+        preview = self.email_body.replace('\n', ' ').strip()
+        return preview[:length] + ('...' if len(preview) > length else '')
 
 
 class EmailGenerator:
@@ -67,29 +68,126 @@ class EmailGenerator:
         if OPENAI_NEW_API:
             self.client = OpenAI(api_key=self.api_key)
         else:
+            # Fall back to legacy API
+            import openai
             openai.api_key = self.api_key
+            self.client = openai
         
-        # Email templates and patterns
-        self.subject_patterns = [
-            "Quick {opportunity} question for {company}",
-            "{first_name}, noticed something about {company}'s website",
-            "AI opportunity I spotted for {company}",
-            "{company}'s competitive advantage in {industry}",
-            "5-minute chat about {company}'s {pain_point}?",
-            "Quick tech insight for {first_name} at {company}",
-            "{first_name}, your {opportunity} potential",
-            "Spotted a gap in {company}'s tech stack"
-        ]
+        # Enhanced email templates and patterns with more variety and specificity
+        self.subject_patterns = {
+            'data_driven': [
+                "{company}'s conversion rate could increase by {percentage}%",
+                "{first_name}, your site loads {seconds}s slower than competitors",
+                "Found a {value} revenue leak at {company}",
+                "{company}'s mobile traffic drops by {percentage}% - here's why",
+                "Your {tech_stack} setup is costing {company} {amount} annually"
+            ],
+            'curiosity_driven': [
+                "{first_name}, noticed something unusual about {company}",
+                "Quick question about {company}'s {technology} implementation",
+                "{company} vs {competitor} - spotted a key difference",
+                "Your {business_category} competitors are doing this differently",
+                "{first_name}, is {company} planning to scale {specific_area}?"
+            ],
+            'opportunity_focused': [
+                "{company}'s untapped {opportunity_type} potential",
+                "{first_name}, your {pain_point} solution is simpler than you think",
+                "How {similar_company} increased {metric} by {percentage}% with {solution}",
+                "{company} could save {amount} with this one change",
+                "The {technology} upgrade {company} needs for {goal}"
+            ],
+            'industry_specific': [
+                "{industry} leaders are implementing {technology} - is {company}?",
+                "{first_name}, {industry} regulations changing - {company} ready?",
+                "New {industry} compliance requirements affect {company}",
+                "{industry} trend: {technology} adoption up {percentage}%",
+                "{company}'s {industry} positioning opportunity"
+            ],
+            'technical_insight': [
+                "{first_name}, your {tech_metric} indicates {specific_issue}",
+                "{company}'s {technology} architecture needs attention",
+                "Found {number} performance bottlenecks on {company}'s site",
+                "{technology} deprecation affects {company} - timeline?",
+                "Your {tech_stack} could be {percentage}% more efficient"
+            ]
+        }
         
-        self.cta_templates = [
-            "Would you be open to a brief 15-minute call this week?",
-            "Interested in a quick chat about how this could work for {company}?",
-            "Would you like me to send over a brief analysis of the opportunity?",
-            "Could we schedule a brief call to discuss this further?",
-            "Would a quick 10-minute call work for you this week?",
-            "Interested in seeing a more detailed breakdown?",
-            "Should I put together a brief proposal for your review?"
-        ]
+        self.email_hooks = {
+            'metric_based': [
+                "Your website's {metric} is currently {current_value}, but industry leaders in {industry} are achieving {target_value}.",
+                "I noticed {company}'s {technology} implementation could be optimized to increase {business_metric} by approximately {percentage}%.",
+                "Your current {tech_stack} configuration is processing {current_performance}, but there's potential to reach {improved_performance} with targeted optimization."
+            ],
+            'competitive_intelligence': [
+                "While analyzing {industry} companies, I found that {company} has a unique opportunity that your main competitors haven't capitalized on yet.",
+                "Your competitors in {industry} are missing something that {company} could leverage for significant advantage.",
+                "I've been tracking {industry} trends and noticed {company} is positioned perfectly for a strategic move your competitors can't replicate."
+            ],
+            'specific_observation': [
+                "I was reviewing {company}'s {specific_feature} and identified a pattern that typically indicates {business_opportunity}.",
+                "Your {technology} setup shows characteristics I've seen in companies right before they scaled successfully.",
+                "While researching {industry} solutions, {company}'s approach to {specific_area} caught my attention for an interesting reason."
+            ],
+            'urgency_without_pressure': [
+                "With {industry} evolving rapidly, there's a narrow window for {company} to implement {solution} before it becomes standard practice.",
+                "The {technology} landscape is shifting, and {company} has about {timeframe} to capitalize on the current advantage.",
+                "Based on {industry} adoption rates, {company} has a first-mover advantage that won't last beyond {timeframe}."
+            ]
+        }
+        
+        self.value_propositions = {
+            'revenue_growth': [
+                "increase revenue by {percentage}% through {specific_solution}",
+                "capture an additional ${amount} annually via {optimization_area}",
+                "boost conversion rates by {percentage}% with {technology_implementation}",
+                "unlock ${amount} in untapped revenue through {strategic_change}"
+            ],
+            'cost_reduction': [
+                "reduce operational costs by ${amount} annually through {automation_solution}",
+                "eliminate {percentage}% of manual processes with {technology}",
+                "cut {expense_category} expenses by ${amount} monthly via {optimization}",
+                "save {hours} hours weekly through {efficiency_improvement}"
+            ],
+            'competitive_advantage': [
+                "establish market leadership in {specific_area} before competitors catch up",
+                "create a {timeframe} competitive moat through {technology_advantage}",
+                "position {company} as the go-to {industry} provider for {service_area}",
+                "differentiate from {number} competitors through {unique_implementation}"
+            ],
+            'efficiency_gains': [
+                "streamline {process_area} to achieve {percentage}% efficiency improvement",
+                "automate {specific_workflow} reducing processing time by {timeframe}",
+                "optimize {system_component} for {percentage}% performance improvement",
+                "enhance {user_experience_area} resulting in {metric_improvement}"
+            ]
+        }
+        
+        self.cta_templates = {
+            'consultative': [
+                "Would you be interested in seeing the specific analysis I put together for {company}?",
+                "I'd be happy to share the detailed breakdown of how this could work for {company} - interested in a brief call?",
+                "Should I send over the implementation roadmap I drafted for similar {industry} companies?",
+                "Would a 15-minute technical discussion about {specific_solution} be valuable?"
+            ],
+            'collaborative': [
+                "I'm curious about {company}'s current priorities in {area} - does this align with your roadmap?",
+                "Would you be open to exploring how this fits with {company}'s existing {technology_stack}?",
+                "I'd love to understand {company}'s perspective on {industry_challenge} - brief chat possible?",
+                "Interested in comparing notes on {technology_area} implementations?"
+            ],
+            'value_focused': [
+                "Would you like me to model the potential {metric} impact for {company} specifically?",
+                "Should I prepare a cost-benefit analysis tailored to {company}'s situation?",
+                "Interested in seeing the ROI projections I calculated for {specific_solution}?",
+                "Would a brief demo of {solution} working with {company}'s setup be helpful?"
+            ],
+            'low_pressure': [
+                "No agenda here - just thought this might be relevant to {company}'s growth plans.",
+                "Feel free to ignore if timing isn't right, but I thought you might find this interesting.",
+                "Not sure if this fits {company}'s current priorities, but worth a quick discussion?",
+                "This might not be a priority right now, but the opportunity seemed worth mentioning."
+            ]
+        }
         
         self.tone_configurations = {
             'professional': {

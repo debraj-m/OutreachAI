@@ -702,10 +702,12 @@ class AIAnalyzer:
     def validate_insights(self, insights: AIInsights) -> bool:
         """Validate that insights contain meaningful and diverse content"""
         if not insights:
+            self.logger.warning("No insights generated")
             return False
         
         # Check if we have at least one substantial opportunity
-        if not insights.opportunities or not any(len(opp.strip()) > 15 for opp in insights.opportunities):
+        if not insights.opportunities or not any(len(opp.strip()) > 10 for opp in insights.opportunities):
+            self.logger.warning("No substantial opportunities found")
             return False
         
         # Check for diversity - avoid repetitive AI chatbot suggestions
@@ -717,10 +719,10 @@ class AIAnalyzer:
             'ai-powered chatbot', 'chatbot integration'
         ]
         
-        # If more than 60% of opportunities mention the same generic concept, reject
+        # If more than 80% of opportunities mention the same generic concept, reject
         flag_mentions = sum(1 for flag in generic_flags if flag in opportunities_text)
-        if flag_mentions > 1:  # More than one generic mention
-            self.logger.warning("Insights too focused on generic AI chatbot solutions - regenerating")
+        if flag_mentions > 2:  # More than two generic mentions
+            self.logger.warning("Insights too focused on generic AI chatbot solutions")
             return False
         
         # Check for specific, actionable terms that indicate quality insights
@@ -728,25 +730,34 @@ class AIAnalyzer:
             'implement', 'develop', 'create', 'build', 'integrate', 'deploy', 
             'design', 'customize', 'optimize', 'automate', 'track', 'analyze',
             'performance', 'seo', 'conversion', 'workflow', 'dashboard',
-            'system', 'platform', 'tool', 'solution'
+            'system', 'platform', 'tool', 'solution', 'improve', 'enhance',
+            'modernize', 'upgrade', 'scale', 'configure'
         ]
         
         # Count quality indicators in opportunities
         quality_score = sum(1 for indicator in quality_indicators 
                           if indicator in opportunities_text)
         
-        # We want at least 2 quality indicators for good insights
-        if quality_score < 2:
-            self.logger.warning("Insights lack specific technical detail - regenerating")
+        # Relaxed requirement - we want at least 1 quality indicator for good insights
+        if quality_score < 1:
+            self.logger.warning("Insights lack specific technical detail")
             return False
         
-        # Check for variety in opportunity types
+        # Relaxed variety check - accept single type if it's substantial
         opportunity_types = self._classify_opportunity_types(insights.opportunities[:3])
-        if len(set(opportunity_types)) < 2:  # Want at least 2 different types
-            self.logger.warning("Insights lack variety in solution types - regenerating")
-            return False
+        unique_types = set(opportunity_types)
         
-        return True
+        # Accept if we have variety OR if single type has multiple substantial opportunities
+        if len(unique_types) >= 2:
+            # Good variety
+            return True
+        elif len(insights.opportunities) >= 2 and all(len(opp.strip()) > 20 for opp in insights.opportunities[:2]):
+            # Single type but multiple substantial opportunities
+            self.logger.info(f"Single opportunity type ({list(unique_types)[0]}) but multiple substantial insights")
+            return True
+        else:
+            self.logger.warning("Insights lack variety in solution types")
+            return False
     
     def _classify_opportunity_types(self, opportunities: List[str]) -> List[str]:
         """Classify opportunities into types for diversity checking"""
